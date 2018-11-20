@@ -74,6 +74,6 @@ export class StorageManager extends ManagerBase implements IManager {
      * @param item Item
      */
     private _storage(item: Item) {
-        return item.common ? this._ls : this._ss;
+        return item.expires ? this._ss : this._ls;
     }
 }
