@@ -1,32 +1,82 @@
 import { Injectable } from '@angular/core';
 
+import { CookieManager } from './CookieManager';
+import { Item } from './Item';
+import { IManager } from './IManager';
+import { StorageManager } from './StorageManager';
+
 @Injectable({
   providedIn: 'root'
 })
 export class PdsbStorageManagerService {
 
-    readonly _ls = window.localStorage;
-    readonly _ss = window.sessionStorage;
-
-    private _BASE: string;
-    private _COMMON = '/common/';
-    private _PSM: string;
+    readonly _manager: IManager;
+    readonly _OLD_THEME = 'theme';
+    readonly _THEME = '/sis/' + this._OLD_THEME + '/!';
 
     private _items = {};
+    private _themeChecked = false;
+    private _tracked = new Item('psm', true, false);
 
     constructor() {
-        // Set the base for app-specific keys
-        const bases = document.getElementsByTagName('base');
-        if (bases.length > 0) {
-            this._BASE = bases[0].attributes['href'].nodeValue as string;
-        } else {
-            this._BASE = '/';
-        }
-        // Get this app's keys
-        this._PSM = this._BASE + 'psm';
-        this._items = <Item[]>JSON.parse(this._ss.getItem(this._PSM)) || {};
+        this._manager = this._canUseStorage() ? new StorageManager() : new CookieManager();
+        this._track();
+        this._items = this._manager.get(this._tracked);
     }
 
+    /**
+     * Determines if we can use local / session storage
+     * - If local/session storage is available, it will be used
+     * - If not, then cookies are used
+     */
+    private _canUseStorage() {
+        const key = 'test';
+        const ls = window.localStorage;
+        ls.setItem(key, 'test');
+        if (ls.getItem(key)) {
+            ls.removeItem(key);
+            return true;
+        }
+        return false;
+    }
+
+    /* *********************************************************************
+     * Simple methods for getting and setting the theme
+     * - The theme will always be saved as a cookie
+     * ********************************************************************/
+    /**
+     * Returns the theme
+     * - When first getting the theme, it will check to see if the old theme
+     *   cookie exists
+     * - If so, it deletes it and writes it into the new theme cookie
+     * - Otherwise, it reads the new theme cookie
+     */
+    getTheme() {
+        if (!this._themeChecked) {
+            const old = CookieManager.read(this._OLD_THEME);
+            if (old) {
+                CookieManager.write(this._OLD_THEME, '', true);
+                CookieManager.write(this._THEME, old, false);
+            }
+            this._themeChecked = true;
+            return old;
+        }
+        return CookieManager.read(this._THEME);
+    }
+
+    /**
+     * Sets the theme
+     * @param val string
+     */
+    setTheme(val: string) {
+        return CookieManager.write(this._THEME, val, false);
+    }
+
+    /* *********************************************************************
+     * The main service methods to get / set / remove storage items
+     * - Depending on the device, local / session storage or cookies will
+     *   be used
+     * ********************************************************************/
     /**
      * Gets the object from session or local storage
      * @param key The key of the item to get
@@ -34,9 +84,7 @@ export class PdsbStorageManagerService {
     get(key: string): string | number | boolean | object | Array<any> {
         try {
             const item = this._items[key] || this._find(key);
-            const path = this._path(item.key, item.common);
-            const val = this._storage(item).getItem(path) || null;
-            return JSON.parse(val);
+            return item ? this._manager.get(item) : null;
         } catch (e) {
             return null;
         }
@@ -51,12 +99,11 @@ export class PdsbStorageManagerService {
      */
     set(key: string, val: string | number | boolean | object | Array<any>, expires: boolean = true, common: boolean = false): boolean {
         try {
-            const path = this._path(key, common);
             const item = new Item(key, expires, common);
-            const json = JSON.stringify(val);
-            this._items[item.key] = item;
-            this._storage(item).setItem(path, json);
-            this._track();
+            if (this._manager.set(item, val)) {
+                this._items[item.key] = item;
+                this._track();
+            }
         } catch (e) {
             return false;
         }
@@ -69,17 +116,17 @@ export class PdsbStorageManagerService {
      * @param track true ? update the tracking session : don't update
      */
     remove(key: string, track: boolean = true) {
-        const item = this._items[key];
-        const path = this._path(item.key, item.common);
+        const item = this._items[key] || this._find(key);
         if (item) {
             try {
-                this._storage(item).removeItem(path);
-                delete this._items[item.key];
+                if (this._manager.remove(item)) {
+                    delete this._items[item.key];
+                    if (track) {
+                        this._track();
+                    }
+                }
             } catch (e) {
                 return false;
-            }
-            if (track) {
-                this._track();
             }
         }
         return true;
@@ -90,40 +137,23 @@ export class PdsbStorageManagerService {
      * @param force true ? only /COMMON/ && /BASE_HREF/ items in session storage : only /BASE_HREF/ items in session storage
      */
     removeAll(force: boolean = false) {
-        for (const key of Object.keys(this._items)) {
+        const keys = Object.keys(this._items);
+        for (const key of keys) {
             const item = this._items[key];
             if (item.expires && (force || (!force && !item.common))) {
-                this.remove(item.key, false);
+                this._manager.remove(item);
             }
         }
         this._track();
-        if (Object.keys(this._items).length === 0) {
-            this._ss.removeItem(this._PSM);
-        }
     }
 
     /**
-     * Attemps to find a stored item in either session or local storage
-     * - This will get called when the get method is not able to find
-     *   the key in this._items (likely to happen when a app that opens
-     *   in a pop-up is trying to access the token)
-     * - If a key is found, it will add itslef to this apps session
-     *   manager list
-     * @param key The name of the key to find
+     * Uses the appropriate manager to search for an item with the provided key
+     * - If an item is found, it is added to the tracker
+     * @param key string
      */
     private _find(key: string) {
-        const commonPath = this._path(key, true);
-        const appPath = this._path(key, false);
-        let item: Item;
-        if (this._ss[commonPath]) {
-            item = new Item(key, true, true);
-        } else if (this._ss[appPath]) {
-            item = new Item(key, true, false);
-        } else if (this._ls[commonPath]) {
-            item = new Item(key, false, true);
-        } else if (this._ls[appPath]) {
-            item = new Item(key, false, false);
-        }
+        const item = this._manager.find(key);
         if (item) {
             this._items[key] = item;
             this._track();
@@ -132,42 +162,9 @@ export class PdsbStorageManagerService {
     }
 
     /**
-     * Sets the item's path
-     * @param key They key for the item
-     * @param common true ? use common base : use app base
-     */
-    private _path(key: string, common: boolean) {
-        return (common ? this._COMMON : this._BASE) + key;
-    }
-
-    /**
-     * Returns the storage method for the item
-     * @param item The item to use to determine the storage method
-     */
-    private _storage(item: Item): Storage {
-        return item.expires ? this._ss : this._ls;
-    }
-
-    /**
-     * Tracks the items by creating a session
+     * Updates the tracking storage
      */
     private _track() {
-        this._ss.setItem(this._PSM, JSON.stringify(this._items));
-    }
-}
-
-/**
- * Item class
- * - Stores the required information to get / set session data
- */
-class Item {
-    key: string;
-    expires: boolean;
-    common: boolean;
-
-    constructor(key: string, expires: boolean = true, common: boolean = false) {
-        this.key = key;
-        this.expires = expires;
-        this.common = common;
+        this._manager.set(this._tracked, this._items);
     }
 }
