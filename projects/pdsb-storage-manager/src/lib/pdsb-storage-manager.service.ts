@@ -53,13 +53,13 @@ export class PdsbStorageManagerService {
      */
     getTheme() {
         if (!this._themeChecked) {
+            this._themeChecked = true;
             const old = CookieManager.read(this._OLD_THEME);
             if (old) {
                 CookieManager.write(this._OLD_THEME, '', true);
                 CookieManager.write(this._THEME, old, false);
+                return old;
             }
-            this._themeChecked = true;
-            return old;
         }
         return CookieManager.read(this._THEME);
     }
