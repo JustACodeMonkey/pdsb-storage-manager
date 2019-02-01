@@ -141,7 +141,7 @@ export class PdsbStorageManagerService {
         for (const key of keys) {
             const item = this._items[key];
             if (item.expires && (force || (!force && !item.common))) {
-                this._manager.remove(item);
+                this.remove(item.key, false);
             }
         }
         this._track();
