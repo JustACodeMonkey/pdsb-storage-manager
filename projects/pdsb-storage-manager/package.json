@@ -1,6 +1,6 @@
 {
   "name": "pdsb-storage-manager",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "description": "Simple web storage manager to work with multiple apps under the same domain.",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {

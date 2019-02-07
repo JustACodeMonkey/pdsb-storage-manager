@@ -15,9 +15,9 @@ export class CookieManager extends ManagerBase implements IManager {
 
     /**
      * Static method to read a cookie (can be used outside of the main storage manager service)
-     * @param path string
+     * @param name string
      */
-    static read(path: string) {
+    static read(name: string) {
         const cookies = document.cookie.split(';');
         let json;
         for (let i = 0; i < cookies.length; i++) {
@@ -25,8 +25,8 @@ export class CookieManager extends ManagerBase implements IManager {
             while (cookie.charAt(0) === ' ') {
                 cookie = cookie.substring(1);
             }
-            if (cookie.indexOf(path) === 0) {
-                json = decodeURIComponent(cookie.substring(path.length + 1, cookie.length));
+            if (cookie.indexOf(name) === 0) {
+                json = decodeURIComponent(cookie.substring(name.length + 1, cookie.length));
                 break;
             }
         }
@@ -35,13 +35,16 @@ export class CookieManager extends ManagerBase implements IManager {
 
     /**
      * Static method to write a cookie (can be used outside of the main storage manager service)
-     * @param path string
+     * @param name string
      * @param val string
      * @param expires boolean
+     * @param path string
      */
-    static write(path: string, val: string, expires: boolean) {
+    static write(name: string, val: string, expires: boolean, path?: string) {
+        const strVal     = encodeURIComponent(val);
         const strExpires = (expires ? '' : ';expires=Fri, 31 Dec 9999 23:59:59 GMT');
-        document.cookie = path + '=' + encodeURIComponent(val) + strExpires + ';path=/';
+        const strPath    = ';path=' + (path || '/');
+        document.cookie  = `${name}=${strVal}${strExpires}${strPath}`;
         if (document.cookie.length > 4096) {
             alert ('Cookie size limit reached');
         }

@@ -15,10 +15,12 @@ export class PdsbStorageManagerService {
     readonly _THEME = '/sis/' + this._OLD_THEME + '/!';
 
     private _items = {};
+    private _oldThemeBase = '';
     private _themeChecked = false;
     private _tracked = new Item('psm', true, false);
 
     constructor() {
+        this._setOldThemeBase();
         this._manager = this._canUseStorage() ? new StorageManager() : new CookieManager();
         this._track();
         this._items = this._manager.get(this._tracked);
@@ -55,8 +57,8 @@ export class PdsbStorageManagerService {
         if (!this._themeChecked) {
             this._themeChecked = true;
             const old = CookieManager.read(this._OLD_THEME);
-            if (old) {
-                CookieManager.write(this._OLD_THEME, '', true);
+            if (old && old !== undefined) {
+                CookieManager.write(this._OLD_THEME, '', true, this._oldThemeBase);
                 CookieManager.write(this._THEME, old, false);
                 return old;
             }
@@ -145,6 +147,16 @@ export class PdsbStorageManagerService {
             }
         }
         this._track();
+    }
+
+    /**
+     * Gets the application base (from the HTML file)
+     */
+    private _setOldThemeBase() {
+        const bases = document.getElementsByTagName('base');
+        if (bases.length > 0) {
+            this._oldThemeBase = bases[0].attributes['href'].nodeValue as string;
+        }
     }
 
     /**
