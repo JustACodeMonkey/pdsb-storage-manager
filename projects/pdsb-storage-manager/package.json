@@ -1,6 +1,6 @@
 {
   "name": "pdsb-storage-manager",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Simple web storage manager to work with multiple apps under the same domain.",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/JustACodeMonkey/pdsb-storage-manager",
   "peerDependencies": {
-    "@angular/common": ">=7.0.0",
-    "@angular/core": ">=7.0.0"
+    "@angular/common": ">=9.0.0",
+    "@angular/core": ">=9.0.0"
   }
 }
